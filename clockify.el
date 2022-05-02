@@ -16,7 +16,7 @@
 (require 'request)
 (require 'cl-lib)
 
-(defvar clockify--curent-user-id nil)
+(defvar clockify--current-user-id nil)
 (defvar clockify--active-workspace-id nil)
 
 ;;; User-Configurable Variables
@@ -40,6 +40,16 @@
 
 
 ;;; Support Functions
+(defun clockify--current-time-ISO8601 ()
+  "Generates the current time in the ISO8601 format
+ YYYY-MM-DDThh:mm:ss.sTZD (eg 1997-07-16T19:20:30.45+01:00)"
+  (concat
+   ;; (format-time-string "%Y-%m-%dT%T")
+   ;; ((lambda (x) (concat (substring x 0 3) ":" (substring x 3 5)))
+   ;;  (format-time-string "%z"))))
+   (format-time-string "%Y-%m-%dT%T" nil t)
+   "Z"))
+
 (defun clockify--generate-headers ()
   "Generate request headers."
   (if clockify-auth-token
@@ -62,6 +72,16 @@ WORKSPACE-ID the workspace id."
 				   workspace-id
 				   "/projects")))
 
+(defun clockify--entries-endpoint (workspace-id user-id)
+  "Clockify time entries endpoint.
+WORKSPACE-ID the workspace id.
+USER-ID the user id"
+  (concat clockify-api-url (concat "/workspaces/"
+				   workspace-id
+				   "/user/"
+           user-id
+           "/time-entries")))
+
 ;;; Functions
 
 (defun clockify--error-fn (&rest args &key error-thrown &allow-other-keys)
@@ -77,6 +97,7 @@ DATA is the optional body of the request"
   (let ((response (request-response-data
 		   (request endpoint
 			    :type method
+          :data (json-encode data)
 			    :headers (clockify--generate-headers)
 			    :sync t
 			    :parser 'json-read
@@ -89,7 +110,7 @@ DATA is the optional body of the request"
   (let ((response (clockify--query
 		   "GET"
 		   (clockify--user-endpoint))))
-    (setq clockify--curent-user-id (cdr (assoc 'id response)))
+    (setq clockify--current-user-id (cdr (assoc 'id response)))
     (setq clockify--active-workspace-id (cdr (assoc 'activeWorkspace response)))))
 
 (defun clockify--projects ()
@@ -99,7 +120,21 @@ DATA is the optional body of the request"
 		   (clockify--projects-endpoint clockify--active-workspace-id))))
     response))
 
+(defun clockify--ongoing-entry ()
+  "Retrieve ongoing time entry"
+  (let ((response (clockify--query
+                   "GET"
+                   (clockify--entries-endpoint clockify--active-workspace-id clockify--current-user-id))))
+                   response))
 
+(defun clockify--stop-entry ()
+  "Stop ongoing time entry"
+  (let ((response (clockify--query
+                   "PATCH"
+                   (clockify--entries-endpoint clockify--active-workspace-id clockify--current-user-id)
+                   `(("end" . ,(clockify--current-time-ISO8601)))
+                   )))
+                   response))
 
 (provide 'clockify)
 ;;; clockify.el ends here
