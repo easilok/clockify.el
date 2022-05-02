@@ -64,7 +64,7 @@ WORKSPACE-ID the workspace id."
 
 ;;; Functions
 
-(defun* clockify--error-fn (&key error-thrown &allow-other-keys)
+(defun clockify--error-fn (&rest args &key error-thrown &allow-other-keys)
   "Callback to run in case of error request response.
 ERROR-THROWN is the request response data."
   (message "Got error: %S" error-thrown))
@@ -80,7 +80,8 @@ DATA is the optional body of the request"
 			    :headers (clockify--generate-headers)
 			    :sync t
 			    :parser 'json-read
-			    :error 'clockify--error-fn))))
+			    :error 'clockify--error-fn
+          ))))
     response))
 
 (defun clockify--user-info ()
