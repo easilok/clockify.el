@@ -105,6 +105,18 @@ LAST-ENTRIES-LIST the last entries list returned by the clockify API request."
               ) last-entries-list)
     (delete-dups entries-descriptions)))
 
+(defun clockify--build-list-with-key-values (fetched-list key)
+  "Build distinct value list based on a clockify fetched list.
+FETCHED-LIST the list returned by the clockify API request.
+KEY the key to get the value for building the result"
+  (let (key-values)
+    (mapcar (lambda (entry)
+              (setq key-values
+                    (cons (cdr (assoc key entry))
+                          key-values))
+              ) fetched-list)
+    (delete-dups key-values)))
+
 (defun clockify--build-last-entries-details (last-entries-list)
   "Build distinct entries details based on clockify last entries list.
 The entries details are in the format (DESCRIPTION . PROJECTID).
@@ -117,6 +129,20 @@ LAST-ENTRIES-LIST the last entries list returned by the clockify API request."
                           last-entries-compact))
               ) last-entries-list)
     (delete-dups last-entries-compact)))
+
+(defun clockify--build-list-with-key-pair (fetched-list key1 key2)
+  "Build distinct dotted pair list based on a clockify fetched list.
+FETCHED-LIST the list returned by the clockify API request.
+KEY1 the key to get the value wich will be the key in the dotted pair result
+KEY2 the key to get the value wich will be the calue in the dotted pair result"
+  (let (key-pair-list)
+    (mapcar (lambda (entry)
+              (setq key-pair-list
+                    (cons
+                     `(,(cdr (assoc key1 entry)) . ,(cdr (assoc key2  entry)))
+                          key-pair-list))
+              ) fetched-list)
+    (delete-dups key-pair-list)))
 
 ;;; Functions
 
@@ -160,6 +186,15 @@ PARAMS is the alist to be url encoded for the request (optional)"
 		   (clockify--projects-endpoint clockify--active-workspace-id))))
     response))
 
+(defun clockify--add-project (name)
+  "Add a new project to clockify.
+NAME is the name of the new project."
+  (let ((response (clockify--query
+                   "POST"
+                   (clockify--projects-endpoint clockify--active-workspace-id)
+                   `(("name" . ,name))))
+                   response)))
+
 (defun clockify--time-entries ()
   "Retrieve last time entries (default 50)."
   (let ((response (clockify--query
@@ -169,7 +204,8 @@ PARAMS is the alist to be url encoded for the request (optional)"
 
 (defun clockify--time-entries-desc-list ()
   "Retrieve last time entries descriptions (default 50)."
-  (clockify--build-last-entries-names (clockify--time-entries)))
+  ;; (clockify--build-last-entries-names (clockify--time-entries)))
+  (clockify--build-list-with-key-values (clockify--time-entries) 'description))
 
 (defun clockify--time-entries-details-list ()
   "Retrieve last time entries details (default 50).
@@ -198,6 +234,8 @@ PROJECTID is the id of the project to associate the new entry with (Optional)"
                      ("billable" . "true"))))
                    response)))
 
+;; Interactive functions for quick interaction
+
 (defun clockify--stop-entry ()
   "Stop ongoing time entry."
   (interactive)
@@ -206,7 +244,6 @@ PROJECTID is the id of the project to associate the new entry with (Optional)"
                    (clockify--user-entries-endpoint clockify--active-workspace-id clockify--current-user-id)
                    `(("end" . ,(clockify--current-time-ISO8601))))))
                    response))
-
 
 (defun clockify--restart-previous-entry-no-project ()
   "Prompt user with a list of previous time entries to restart one.
@@ -222,12 +259,29 @@ The new entry will be added without atributing a project."
     (clockify--add-entry selection
                          (cdr (assoc selection time-entries)))))
 
+(defun clockify--start-new-entry-without-project ()
+  "Prompt user for a description for a new time entry.
+The new time entry will be added without a project associated."
+  (interactive)
+  (let ((description (read-string "Enter new entry description: ")))
+    (clockify--add-entry description)))
+
 (defun clockify--start-new-entry ()
   "Prompt user for a description for a new time entry.
 A project to associate the new entry will be prompt with a list."
   (interactive)
-  (let ((description (read-string "Enter new entry description: ")))
-    (clockify--add-entry description)))
+  (message "Loading Projects")
+  (let* ((projects (clockify--build-list-with-key-pair (clockify--projects) 'name 'id))
+         (description (read-string "Enter new entry description: "))
+         (selected-project (completing-read "Select project:" projects)))
+    (clockify--add-entry description
+                         (cdr (assoc selected-project projects)))))
+
+(defun clockify--add-new-project ()
+  "Prompt user for a name for a new project."
+  (interactive)
+  (let ((name (read-string "Enter new project name: ")))
+    (clockify--add-project name)))
 
 (provide 'clockify)
 ;;; clockify.el ends here
